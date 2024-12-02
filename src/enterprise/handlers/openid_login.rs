@@ -164,11 +164,26 @@ pub(crate) async fn user_from_claims(
         username
     } else {
         debug!("Preferred username not found in the claims, extracting from email address.");
-        // Extract the username from the email address
-        let username = email.split('@').next().ok_or(WebError::BadRequest(
-            "Failed to extract username from email address".to_string(),
-        ))?;
-        debug!("Username extracted from email ({email:?}): {username})");
+        // Extract the local part and domain from the email address
+        let parts: Vec<&str> = email.split('@').collect();
+        if parts.len() != 2 {
+            debug!("Failed to extract username from email address. Invalid Email address? {}", email);
+            return Err(WebError::BadRequest(
+                "Failed to extract username from email address. Invalid Email address?".to_string(),
+            ));
+        }
+        let local_part = parts[0];
+        let domain_part = parts[1];
+        let mut username = local_part.to_string();
+
+        // If the username is too short, append an underscore and part of the domain
+        if username.len() < 3 {
+            // Extract the first part of the domain before any dot
+            let domain_first_part = domain_part.split('.').next().unwrap_or("");
+            username = format!("{}_{}", username, domain_first_part);
+            debug!("Username was too short. Adjusted username: {}", username);
+        }
+
         username
     };
     let username = prune_username(username);
